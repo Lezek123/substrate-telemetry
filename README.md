@@ -11,7 +11,7 @@ LowDB database is kept in `/db.json`
 
 Endpoints exposed by `api`:
 - `http://localhost:5000/nodes` - list of known nodes (name + id)
-- `http://localhost:5000/nodes` - all available information about a node
+- `http://localhost:5000/node/{id}` - all available information about a node
 
 To stop you can use:
 
