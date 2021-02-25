@@ -46,6 +46,7 @@ function App() {
                 flexDirection: "column",
                 alignItems: "flex-end",
               }}
+              key={key}
             >
               <NodeSelect
                 onData={(data) => updateSelectedNodeData(key, data)}
@@ -103,7 +104,7 @@ function App() {
           minHeight: "60px",
         }}
       >
-        <Button color="green" size="big" onClick={() => addNode()} icon="plus">
+        <Button color="green" size="big" onClick={() => addNode()}>
           <Icon name="plus" />
           Add node
         </Button>

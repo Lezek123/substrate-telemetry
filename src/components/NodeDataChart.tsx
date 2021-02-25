@@ -53,9 +53,6 @@ const NodeDataChart: React.FC<Props> = ({
       return [[], 0, 0];
     }
 
-    let dataMin = nodesData[0].history[0][dataKey],
-      dataMax = nodesData[0].history[0][dataKey];
-
     let aggregationData: AggregationData = {};
 
     nodesData.forEach(({ history, nodeName }) => {
@@ -108,11 +105,12 @@ const NodeDataChart: React.FC<Props> = ({
     });
 
     // Convert aggregationData to isolated chart data and get dataMin and dataMax
+    let dataMin = Number.MAX_SAFE_INTEGER, dataMax = Number.MIN_SAFE_INTEGER;
     for (const [timestamp, data] of Object.entries(aggregationData)) {
       isolatedData.push({
         timestamp: parseInt(timestamp),
         ..._.mapValues(data, ({ value }) => {
-          if (value < dataMin) {
+          if (value !== null && value < dataMin) {
             dataMin = value;
           }
           if (value > dataMax) {
