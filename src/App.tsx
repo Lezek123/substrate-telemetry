@@ -67,7 +67,7 @@ function App() {
                       <Table.Cell>{data.nodeVersion}</Table.Cell>
                     </Table.Row>
                     <Table.Row>
-                      <Table.Cell>Current location:</Table.Cell>
+                      <Table.Cell>Location:</Table.Cell>
                       <Table.Cell>
                         {data.location
                           ? `${data.location.city} (Lat: ${data.location.lat}, Lon: ${data.location.lng})`

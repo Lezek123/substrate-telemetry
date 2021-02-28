@@ -1,7 +1,6 @@
 type AggregationType = "max" | "min" | "bwavg" | "avg";
 
 type NodeShortData = {
-  id: number;
   nodeName: string;
 };
 

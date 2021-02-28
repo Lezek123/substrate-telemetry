@@ -8,9 +8,9 @@ type Props = {
 };
 
 const NodeSelect: React.FC<Props> = ({ onData }) => {
-  const handleChange = (nodeId: number) => {
+  const handleChange = (nodeName: string) => {
     axios
-      .get<NodeFullData>(`/node/${nodeId}`)
+      .get<NodeFullData>(`/node/${nodeName}`)
       .then(({ data }) => {
         onData(data);
       })
@@ -33,11 +33,11 @@ const NodeSelect: React.FC<Props> = ({ onData }) => {
     <Dropdown
       placeholder="Choose a node"
       onChange={(e, data) => {
-        handleChange(data.value as number);
+        handleChange(data.value as string);
       }}
-      options={nodes.map(({ id, nodeName }) => ({
-        value: id,
-        text: `${nodeName} (${id})`,
+      options={nodes.map(({ nodeName }) => ({
+        value: nodeName,
+        text: nodeName,
       }))}
       fluid
       search
