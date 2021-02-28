@@ -5,21 +5,24 @@ import { tracker } from "./trackingStats";
 import Debug from "debug";
 
 const client = new WebSocketClient();
-const utf8decoder = new TextDecoder("utf-8");
 
 const WS_URI =
   process.env.WEBSOCKET_URI || "wss://telemetry.joystream.org/feed/";
 const CHAIN_NAME = process.env.CHAIN_NAME || "Joystream";
 const TRACKING_STATS_INTERVAL_MINUTES = parseInt(process.env.INTERVAL || "5");
 const PING_INTERVAL_MS = 30000;
+const NO_NEW_NODE_TIMEOUT = 30000;
 
 const wsDebug = Debug("websocket");
 const pingDebug = wsDebug.extend("ping");
 const msgDebug = wsDebug.extend("message");
 
-function main() {
+async function main() {
   let currentPingId = 0;
   let currentPingTime = 0;
+  let noNewNodeTimeout: NodeJS.Timeout;
+
+  await tracker.init()
 
   client.connect(WS_URI);
 
@@ -45,12 +48,19 @@ function main() {
     connection.on("message", function (message) {
       handleMessages(
         FeedMessage.deserialize(
-          (utf8decoder.decode(message.binaryData) as any) as FeedMessage.Data
+          message.binaryData?.toString('utf8') as any as FeedMessage.Data
         )
       );
     });
 
+    noNewNodeTimeout = setTimeout(() => {
+      wsDebug(`No NewNode message recieved after ${NO_NEW_NODE_TIMEOUT} ms... Exiting`)
+      connection.close();
+      process.exit();
+    }, NO_NEW_NODE_TIMEOUT)
+
     connection.send(`subscribe:${CHAIN_NAME}`);
+
     setInterval(() => {
       if (currentPingTime) {
         pingDebug("Expected pong not recieved, exiting...");
@@ -63,7 +73,7 @@ function main() {
     }, PING_INTERVAL_MS);
   });
 
-  const handleMessages = (messages: FeedMessage.Message[]) => {
+  const handleMessages = async (messages: FeedMessage.Message[]) => {
     for (const message of messages) {
       switch (message.action) {
         case ACTIONS.FeedVersion: {
@@ -74,20 +84,25 @@ function main() {
 
         case ACTIONS.BestBlock: {
           const [best, blockTimestamp, blockAverage] = message.payload;
-          msgDebug(
-            `New best block: ${best} (ts: ${blockTimestamp}, avg: ${blockAverage})`
-          );
+          // msgDebug(
+          //   `New best block: ${best} (ts: ${blockTimestamp}, avg: ${blockAverage})`
+          // );
           break;
         }
 
         case ACTIONS.BestFinalized: {
           const [finalized, hash] = message.payload;
-          msgDebug(`New best finalized block: ${finalized} (${hash})`);
+          // msgDebug(`New best finalized block: ${finalized} (${hash})`);
           break;
         }
 
         case ACTIONS.AddedNode: {
-          tracker.handleNewNode(message.payload);
+          if (noNewNodeTimeout) {
+            clearTimeout(noNewNodeTimeout)
+          }
+          // FIXME: Temporally we "await" each new node to avoid out-of-memory issue when db grows big
+          // Would probably need to migrate to different db though 
+          await tracker.handleNewNode(message.payload);
           break;
         }
 
@@ -95,6 +110,7 @@ function main() {
           const id = message.payload;
           // Happens when node goes offline
           msgDebug(`Removed node: ${id}`);
+          tracker.handleRemovedNode(id)
           break;
         }
 
@@ -173,7 +189,8 @@ function main() {
         }
 
         case ACTIONS.SubscribedTo: {
-          // Do nothing
+          const chainLabel = message.payload
+          msgDebug(`${chainLabel} chain subscription confirmed`)
           break;
         }
 
@@ -232,4 +249,4 @@ function main() {
   );
 }
 
-main();
+main().catch(console.error);

@@ -1,37 +1,43 @@
 import express from "express";
-import { dbPromise } from "./db";
+import { dbPromise, NodeTrackingHistoryEntry } from "./db";
+import Debug from 'debug';
+import _ from 'lodash';
 
 const app = express();
+const dbReloadDebug = Debug('db-reload')
 const port = process.env.API_PORT || 5000;
+const DB_RELOAD_INTERVAL_MIN = parseInt(process.env.RELOAD_INTERVAL || '5')
 
 app.get("/nodes", async (req, res) => {
   const db = await dbPromise;
-  // Reload db
-  await db.read();
 
-  res.send(db.get("nodes").map(({ id, nodeName }) => ({ id, nodeName })));
+  res.send(db.get("nodes").map(({ nodeName }) => ({ nodeName })).uniqBy('nodeName').value());
 });
 
-app.get("/node/:nodeId", async (req, res) => {
-  const { nodeId } = req.params;
+app.get("/node/:nodeName", async (req, res) => {
+  const { nodeName } = req.params;
   const db = await dbPromise;
-  // Reload db
-  await db.read();
 
-  if (parseInt(nodeId).toString() !== nodeId) {
-    res.status(400).send("Invalid node id");
-    return;
-  }
-
-  const nodeData = db
+  const nodeInstances = db
     .get("nodes")
-    .find((n) => n.id === parseInt(nodeId))
+    .filter((n) => n.nodeName === nodeName)
+    .sort((a, b) => b.id - a.id) // Sort by id DESC
     .value();
 
-  if (!nodeData) {
+  if (!nodeInstances.length) {
     res.status(404).send("Not found");
     return;
   }
+
+  // Merge data from multiple db instances by name
+  const historyMap = new Map<number, NodeTrackingHistoryEntry>()
+  nodeInstances.forEach((instanceData) => {
+    instanceData.history.forEach((entry) => {
+      historyMap.set(entry.timestamp, entry)
+    })
+  })
+  const nodeData = nodeInstances[nodeInstances.length - 1]
+  nodeData.history = Array.from(historyMap.values()).sort((a, b) => a.timestamp - b.timestamp)
 
   res.send(nodeData);
 });
@@ -39,3 +45,9 @@ app.get("/node/:nodeId", async (req, res) => {
 app.listen(port, () => {
   console.log(`Listening on port ${port}...`);
 });
+
+// Periodically reload db
+setInterval(async () => {
+  (await dbPromise).read()
+  dbReloadDebug('Database state reloaded')
+}, DB_RELOAD_INTERVAL_MIN * 60 * 1000) 

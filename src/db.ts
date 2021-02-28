@@ -18,6 +18,8 @@ type NodeInfo = {
   nodeName: string;
   nodeImplementation: string;
   nodeVersion: string;
+  address?: string;
+  networkID?: string;
   location?: { lat: number; lng: number; city: string };
   lastStartupTime?: number;
   history: NodeTrackingHistoryEntry[];
