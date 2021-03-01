@@ -1,10 +1,8 @@
-import { client as WebSocketClient } from "websocket";
+import WebSocket from "ws";
 import { FeedMessage } from "./common";
 import { ACTIONS } from "./common/feed";
 import { tracker } from "./trackingStats";
 import Debug from "debug";
-
-const client = new WebSocketClient();
 
 const WS_URI =
   process.env.WEBSOCKET_URI || "wss://telemetry.joystream.org/feed/";
@@ -22,55 +20,47 @@ async function main() {
   let currentPingTime = 0;
   let noNewNodeTimeout: NodeJS.Timeout;
 
-  await tracker.init()
+  await tracker.init();
 
-  client.connect(WS_URI);
-
-  client.on("connectFailed", function (error) {
-    wsDebug("Connect Error: " + error.toString());
-    process.exit();
+  const client = new WebSocket(WS_URI, {
+    perMessageDeflate: false,
   });
 
-  client.on("connect", function (connection) {
+  client.on("open", function () {
     wsDebug("WebSocket Client Connected");
 
-    connection.on("error", function (error) {
-      wsDebug("Connection Error: " + error.toString());
-      connection.close();
-      process.exit();
-    });
-
-    connection.on("close", function (code, desc) {
-      wsDebug(`Connection Closed! Code: ${code}, Desc: ${desc}`);
-      process.exit();
-    });
-
-    connection.on("message", function (message) {
-      handleMessages(
-        FeedMessage.deserialize(
-          message.binaryData?.toString('utf8') as any as FeedMessage.Data
-        )
-      );
-    });
-
     noNewNodeTimeout = setTimeout(() => {
-      wsDebug(`No NewNode message recieved after ${NO_NEW_NODE_TIMEOUT} ms... Exiting`)
-      connection.close();
+      wsDebug(
+        `No NewNode message recieved after ${NO_NEW_NODE_TIMEOUT} ms... Exiting`
+      );
+      client.close();
       process.exit();
-    }, NO_NEW_NODE_TIMEOUT)
+    }, NO_NEW_NODE_TIMEOUT);
 
-    connection.send(`subscribe:${CHAIN_NAME}`);
+    client.send(`subscribe:${CHAIN_NAME}`);
 
     setInterval(() => {
       if (currentPingTime) {
         pingDebug("Expected pong not recieved, exiting...");
-        connection.close();
+        client.close();
         process.exit();
       }
-      connection.send(`ping:${currentPingId}`);
+      client.send(`ping:${currentPingId}`);
       pingDebug(`Ping ${currentPingId} sent...`);
       currentPingTime = Date.now();
     }, PING_INTERVAL_MS);
+  });
+
+  client.on("unexpected-response", function () {
+    wsDebug("Unexpected response! Exiting...");
+    client.close();
+    process.exit();
+  });
+
+  client.on("message", (msg) => {
+    handleMessages(
+      FeedMessage.deserialize((msg.toString("utf8") as any) as FeedMessage.Data)
+    );
   });
 
   const handleMessages = async (messages: FeedMessage.Message[]) => {
@@ -98,10 +88,10 @@ async function main() {
 
         case ACTIONS.AddedNode: {
           if (noNewNodeTimeout) {
-            clearTimeout(noNewNodeTimeout)
+            clearTimeout(noNewNodeTimeout);
           }
           // FIXME: Temporally we "await" each new node to avoid out-of-memory issue when db grows big
-          // Would probably need to migrate to different db though 
+          // Would probably need to migrate to different db though
           await tracker.handleNewNode(message.payload);
           break;
         }
@@ -110,7 +100,7 @@ async function main() {
           const id = message.payload;
           // Happens when node goes offline
           msgDebug(`Removed node: ${id}`);
-          tracker.handleRemovedNode(id)
+          tracker.handleRemovedNode(id);
           break;
         }
 
@@ -189,8 +179,8 @@ async function main() {
         }
 
         case ACTIONS.SubscribedTo: {
-          const chainLabel = message.payload
-          msgDebug(`${chainLabel} chain subscription confirmed`)
+          const chainLabel = message.payload;
+          msgDebug(`${chainLabel} chain subscription confirmed`);
           break;
         }
 

@@ -4,9 +4,10 @@
   "description": "Store Substrate telemetry data in the database",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start:indexer": "DEBUG=* pm2 --log indexer.log start \"yarn ts-node ./src/index.ts\" --name telemetry-db-indexer",
+    "build": "tsc --build tsconfig.json",
+    "start:indexer": "yarn build && DEBUG=* pm2 --log indexer.log start \"node ./build/index.js\" --name telemetry-db-indexer",
     "stop:indexer": "pm2 delete telemetry-db-indexer",
-    "start:api": "DEBUG=* pm2 --log api.log start \"yarn ts-node ./src/api.ts\" --name telemetry-db-api",
+    "start:api": "yarn build && DEBUG=* pm2 --log api.log start \"node ./src/api.js\" --name telemetry-db-api",
     "stop:api": "pm2 delete telemetry-db-api",
     "start-dev:api": "nodemon --watch \"src/**\" --ext \"ts,json\" --exec \"ts-node src/api.ts\"",
     "start-dev:indexer": "nodemon --watch \"src/**\" --ext \"ts,json\" --exec \"ts-node src/index.ts\"",
@@ -21,6 +22,7 @@
     "@types/lowdb": "^1.0.9",
     "@types/node": "^13.13.2",
     "@types/websocket": "^1.0.1",
+    "@types/ws": "^7.4.0",
     "bn.js": "^5.1.3",
     "debug": "^4.3.1",
     "express": "^4.17.1",
@@ -29,7 +31,7 @@
     "pm2": "^4.5.4",
     "ts-node": "^9.1.1",
     "typescript": "^3.2.0",
-    "websocket": "^1.0.33"
+    "ws": "^7.4.3"
   },
   "devDependencies": {
     "prettier": "^2.2.1"

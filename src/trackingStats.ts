@@ -22,82 +22,105 @@ class NodeStatsTracker {
   // nodeDbIdByNodeId = new Map<number, number>();
   nextDbId = 0;
 
+  newNodeQueue = [] as Variants.AddedNodeMessage['payload'][];
+  queueExecuting = false;
+
   private calcAvgFromStats = (input: AvgDataStats) =>
     input.count ? input.sum.divn(input.count).toNumber() : null;
 
   public async init() {
-    this.nextDbId = ((await dbPromise).get('nodes').last().value()?.id || 0) + 1
+    this.nextDbId =
+      ((await dbPromise).get("nodes").last().value()?.id || 0) + 1;
+
+    setInterval(() => this.executeNewNodeQueue(), 5000)
+  }
+
+  public async executeNewNodeQueue() {
+    const debug = Debug("db:new-node");
+    const db = await dbPromise;
+
+    if (this.newNodeQueue.length && !this.queueExecuting) {
+      this.queueExecuting = true;
+      debug(`Executing new nodes queue (${this.newNodeQueue.length})...`);
+      for (const payload of this.newNodeQueue) {
+        const [
+          id,
+          nodeDetails,
+          nodeStats,
+          nodeIO,
+          nodeHardware,
+          blockDetails,
+          location,
+          startupTime,
+        ] = payload;
+        // TODO: Save address and network id?
+        const [
+          nodeName,
+          nodeImplementation,
+          nodeVersion,
+          optAddress,
+          optNetworkId,
+        ] = nodeDetails;
+        const [peerCount, transactionsInQueue] = nodeStats;
+        const [
+          blockNumber,
+          blockHash,
+          miliseconds,
+          timestamp,
+          optPropagationTime,
+        ] = blockDetails;
+    
+        // TODO: NodeIO?
+        // TODO: NodeHardware?
+    
+        const debug = Debug("db:new-node");
+        const dbId = this.nextDbId++;
+        const nodeDataStr = JSON.stringify({ wsId: id, nodeName, dbId });
+    
+        debug(`Adding new node to db (${nodeDataStr})...`);
+        db
+          .get("nodes")
+          .push({
+            id: dbId,
+            nodeName,
+            nodeImplementation,
+            nodeVersion,
+            address: optAddress || undefined,
+            networkID: optNetworkId || undefined,
+            location: location
+              ? { lat: location[0], lng: location[1], city: location[2] }
+              : undefined,
+            lastStartupTime: startupTime ? startupTime : undefined,
+            history: [],
+          })
+          .value();
+
+        this.statsByNodeId.set(id, {
+          dbId,
+          blockTimesStats: {
+            sum: new BN(miliseconds),
+            count: 1,
+          },
+          propagationTimesStats: {
+            sum: optPropagationTime ? new BN(optPropagationTime) : new BN(0),
+            count: optPropagationTime ? 1 : 0,
+          },
+          peerCount,
+          transactionsInQueue,
+          bestBlockNumber: blockNumber,
+          bestBlockHash: blockHash,
+        });
+      }
+
+      await db.write()
+      debug(`${this.newNodeQueue.length} nodes added to db!`)
+      this.newNodeQueue = [];
+      this.queueExecuting = false;
+    }
   }
 
   public async handleNewNode(payload: Variants.AddedNodeMessage["payload"]) {
-    const db = await dbPromise;
-    const [
-      id,
-      nodeDetails,
-      nodeStats,
-      nodeIO,
-      nodeHardware,
-      blockDetails,
-      location,
-      startupTime,
-    ] = payload;
-    // TODO: Save address and network id?
-    const [
-      nodeName,
-      nodeImplementation,
-      nodeVersion,
-      optAddress,
-      optNetworkId,
-    ] = nodeDetails;
-    const [peerCount, transactionsInQueue] = nodeStats;
-    const [
-      blockNumber,
-      blockHash,
-      miliseconds,
-      timestamp,
-      optPropagationTime,
-    ] = blockDetails;
-
-    // TODO: NodeIO?
-    // TODO: NodeHardware?
-
-    const debug = Debug("db:new-node");
-    const dbId = this.nextDbId++;
-    const nodeDataStr = JSON.stringify({ wsId: id, nodeName, dbId })
-
-    debug(`Adding new node to db (${nodeDataStr})...`);
-    void await db.get("nodes")
-      .push({
-        id: dbId,
-        nodeName,
-        nodeImplementation,
-        nodeVersion,
-        address: optAddress || undefined,
-        networkID: optNetworkId || undefined,
-        location: location
-          ? { lat: location[0], lng: location[1], city: location[2] }
-          : undefined,
-        lastStartupTime: startupTime ? startupTime : undefined,
-        history: [],
-      })
-      .write();
-
-    debug(`New node added! (${nodeDataStr})`)
-    this.statsByNodeId.set(id, {
-      dbId,
-      blockTimesStats: {
-        sum: new BN(miliseconds),
-        count: 1,
-      },
-      propagationTimesStats: {
-        sum: optPropagationTime ? new BN(optPropagationTime) : new BN(0),
-        count: optPropagationTime ? 1 : 0,
-      },
-      peerCount,
-      transactionsInQueue,
-      bestBlockNumber: blockNumber,
-      bestBlockHash: blockHash,
-    });
+    this.newNodeQueue.push(payload)
   }
 
   public handleNewBlock(nodeId: number, blockDetails: BlockDetails) {
@@ -136,12 +159,16 @@ class NodeStatsTracker {
     }
   }
 
-  public async handleUpdatedLocation(nodeId: number, location: NodeLocation, postopned = false) {
+  public async handleUpdatedLocation(
+    nodeId: number,
+    location: NodeLocation,
+    postopned = false
+  ) {
     const debug = Debug("db:update-location");
     const [lat, lng, city] = location;
     const db = await dbPromise;
 
-    const nodeDbId = this.statsByNodeId.get(nodeId)?.dbId
+    const nodeDbId = this.statsByNodeId.get(nodeId)?.dbId;
 
     if (nodeDbId) {
       db.get("nodes")
@@ -150,17 +177,22 @@ class NodeStatsTracker {
           location: { lat, lng, city },
         })
         .write()
-        .then(() => { debug(`Updated node location! ${nodeId}/${nodeDbId} - ${city}`); });
+        .then(() => {
+          debug(`Updated node location! ${nodeId}/${nodeDbId} - ${city}`);
+        });
     } else if (!postopned) {
-      debug('Node not yet found in db... Postponing 10 sec...')
-      setTimeout(() => this.handleUpdatedLocation(nodeId, location, true), 10000)
+      debug("Node not yet found in db... Postponing 30 sec...");
+      setTimeout(
+        () => this.handleUpdatedLocation(nodeId, location, true),
+        30000
+      );
     } else {
-      debug('Postponed location update failed! Node still not in db...')
+      debug("Postponed location update failed! Node still not in db...");
     }
   }
 
   public handleRemovedNode(nodeId: number) {
-    this.statsByNodeId.delete(nodeId)
+    this.statsByNodeId.delete(nodeId);
   }
 
   public async saveSnaphot() {
@@ -181,11 +213,12 @@ class NodeStatsTracker {
         bestBlockHash,
       } = stats;
       const avgBlockTime = this.calcAvgFromStats(blockTimesStats);
-      const avgPropagationTime = this.calcAvgFromStats(
-        propagationTimesStats
-      );
+      const avgPropagationTime = this.calcAvgFromStats(propagationTimesStats);
       const blocksProcessed = blockTimesStats.count;
-      const nodeToUpdate = db.get('nodes').find(n => n.id === stats.dbId).value()
+      const nodeToUpdate = db
+        .get("nodes")
+        .find((n) => n.id === stats.dbId)
+        .value();
       nodeToUpdate.history.push({
         timestamp,
         avgBlockTime,
@@ -195,8 +228,10 @@ class NodeStatsTracker {
         bestBlockNumber,
         bestBlockHash,
         blocksProcessed,
-        uptime: nodeToUpdate.lastStartupTime ? timestamp - nodeToUpdate.lastStartupTime : null,
-      })
+        uptime: nodeToUpdate.lastStartupTime
+          ? timestamp - nodeToUpdate.lastStartupTime
+          : null,
+      });
       // Reset avg.-related stats
       this.statsByNodeId.set(nodeId, {
         ...stats,
@@ -205,7 +240,7 @@ class NodeStatsTracker {
       });
     }
 
-    await db.write()
+    await db.write();
 
     debug("Nodes stats updated");
   }

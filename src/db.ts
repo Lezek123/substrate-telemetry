@@ -1,6 +1,8 @@
 import low from "lowdb";
 import FileAsync from "lowdb/adapters/FileAsync";
 
+const DB_FILE = process.env.DB_FILE || "db.json";
+
 type NodeTrackingHistoryEntry = {
   timestamp: number;
   avgPropagationTime: number | null;
@@ -29,7 +31,7 @@ type Schema = {
   nodes: NodeInfo[];
 };
 
-const adapter = new FileAsync<Schema>("db.json", {
+const adapter = new FileAsync<Schema>(DB_FILE, {
   defaultValue: {
     nodes: [],
   },

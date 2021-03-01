@@ -67,6 +67,7 @@
     "typeRoots": ["./node_modules/@types"],
     "downlevelIteration": true,
     "strictPropertyInitialization": false,
+    "outDir": "build"
   },
   "exclude": ["node_modules"],
   "include": ["src/**/*.ts"]
