@@ -7,7 +7,7 @@
     "build": "tsc --build tsconfig.json",
     "start:indexer": "yarn build && DEBUG=* pm2 --log indexer.log start \"node ./build/index.js\" --name telemetry-db-indexer",
     "stop:indexer": "pm2 delete telemetry-db-indexer",
-    "start:api": "yarn build && DEBUG=* pm2 --log api.log start \"node ./src/api.js\" --name telemetry-db-api",
+    "start:api": "yarn build && DEBUG=* pm2 --log api.log start \"node ./build/api.js\" --name telemetry-db-api",
     "stop:api": "pm2 delete telemetry-db-api",
     "start-dev:api": "nodemon --watch \"src/**\" --ext \"ts,json\" --exec \"ts-node src/api.ts\"",
     "start-dev:indexer": "nodemon --watch \"src/**\" --ext \"ts,json\" --exec \"ts-node src/index.ts\"",
