@@ -158,6 +158,7 @@ const NodeDataChart: React.FC<Props> = ({
             tickFormatter={(timestamp) =>
               dateFormat(timestamp, "HH:MM dd-mm-yy")
             }
+            scale="time"
           />
           <YAxis domain={[domainMin, domainMax]} />
           <Tooltip
