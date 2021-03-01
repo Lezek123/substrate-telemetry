@@ -35,6 +35,7 @@ const adapter = new FileAsync<Schema>(DB_FILE, {
   defaultValue: {
     nodes: [],
   },
+  serialize: JSON.stringify
 });
 const dbPromise = low(adapter);
 
