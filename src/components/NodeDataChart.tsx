@@ -129,7 +129,11 @@ const NodeDataChart: React.FC<Props> = ({
     );
     const domainMax = Math.ceil(dataMax + 0.2 * (dataMax - dataMin));
 
-    return [isolatedData, domainMin, domainMax];
+    return [
+      isolatedData.sort((a, b) => a.timestamp - b.timestamp),
+      domainMin,
+      domainMax
+    ];
   };
 
   const [data, domainMin, domainMax] = getChartData();
@@ -159,6 +163,8 @@ const NodeDataChart: React.FC<Props> = ({
               dateFormat(timestamp, "HH:MM dd-mm-yy")
             }
             scale="time"
+            type="number"
+            domain={['dataMin', 'dataMax']}
           />
           <YAxis domain={[domainMin, domainMax]} />
           <Tooltip
@@ -168,6 +174,7 @@ const NodeDataChart: React.FC<Props> = ({
           <Legend />
           {nodesData.map(({ nodeName }) => (
             <Line
+              key={nodeName}
               type="linear"
               stroke={nodeNameToColor(nodeName)}
               dataKey={nodeName}
