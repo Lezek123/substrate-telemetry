@@ -41,7 +41,7 @@ app.get("/node/:nodeName", async (req, res) => {
 
   // Get most recent node data (with accordance to non-duplicate history entries)
   const mostRecentNodeData = nodeInstances.find(
-    (n) => n.id === history.length ? history[history.length - 1].nodeId : nodeInstances[nodeInstances.length - 1].id
+    (n) => n.id === (history.length ? history[history.length - 1].nodeId : nodeInstances[nodeInstances.length - 1].id)
   );
 
   res.send({ ...mostRecentNodeData?.toJSON(), history });
