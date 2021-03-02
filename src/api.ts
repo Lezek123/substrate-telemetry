@@ -1,61 +1,52 @@
 import express from "express";
-import { dbPromise, NodeTrackingHistoryEntry } from "./db";
-import Debug from "debug";
+import { db, Node, NodeHistoryEntry, NodeLocationRef } from "./postgresdb";
+import { Op } from "sequelize";
 import _ from "lodash";
 
 const app = express();
-const dbReloadDebug = Debug("db-reload");
 const port = process.env.API_PORT || 5000;
-const DB_RELOAD_INTERVAL_MIN = parseInt(process.env.RELOAD_INTERVAL || "5");
 
 app.get("/nodes", async (req, res) => {
-  const db = await dbPromise;
-
-  res.send(
-    db
-      .get("nodes")
-      .map(({ nodeName }) => ({ nodeName }))
-      .uniqBy("nodeName")
-      .value()
+  const [queryRes] = await db.query(
+    'SELECT DISTINCT "nodeName" FROM nodes ORDER BY "nodeName" ASC'
   );
+  res.send(queryRes);
 });
 
 app.get("/node/:nodeName", async (req, res) => {
   const { nodeName } = req.params;
-  const db = await dbPromise;
 
-  const nodeInstances = db
-    .get("nodes")
-    .filter((n) => n.nodeName === nodeName)
-    .sort((a, b) => b.id - a.id) // Sort by id DESC
-    .value();
+  const nodeInstances = await Node.findAll({
+    where: { nodeName },
+    order: [["id", "ASC"]],
+    include: NodeLocationRef,
+  });
 
   if (!nodeInstances.length) {
     res.status(404).send("Not found");
     return;
   }
 
-  // Merge data from multiple db instances by name
-  const historyMap = new Map<number, NodeTrackingHistoryEntry>();
-  nodeInstances.forEach((instanceData) => {
-    instanceData.history.forEach((entry) => {
-      historyMap.set(entry.timestamp, entry);
-    });
+  const historyEntries = await NodeHistoryEntry.findAll({
+    where: { nodeId: { [Op.in]: nodeInstances.map((n) => n.id) } },
+    order: [
+      ["timestamp", "ASC"],
+      ["nodeId", "ASC"], // After timestamp - proritize by "earlier" nodeId
+    ],
   });
-  const nodeData = nodeInstances[nodeInstances.length - 1];
-  nodeData.history = Array.from(historyMap.values()).sort(
-    (a, b) => a.timestamp - b.timestamp
+
+  // Remove duplicate timestamps
+  // (if 2 nodes had the same name at the same time, the earlier-id node should be prioritized)
+  const history = _.uniqBy(historyEntries, "timestamp");
+
+  // Get most recent node data (with accordance to non-duplicate history entries)
+  const mostRecentNodeData = nodeInstances.find(
+    (n) => n.id === history.length ? history[history.length - 1].nodeId : nodeInstances[nodeInstances.length - 1].id
   );
 
-  res.send(nodeData);
+  res.send({ ...mostRecentNodeData?.toJSON(), history });
 });
 
 app.listen(port, () => {
   console.log(`Listening on port ${port}...`);
 });
-
-// Periodically reload db
-setInterval(async () => {
-  (await dbPromise).read();
-  dbReloadDebug("Database state reloaded");
-}, DB_RELOAD_INTERVAL_MIN * 60 * 1000);

@@ -90,9 +90,7 @@ async function main() {
           if (noNewNodeTimeout) {
             clearTimeout(noNewNodeTimeout);
           }
-          // FIXME: Temporally we "await" each new node to avoid out-of-memory issue when db grows big
-          // Would probably need to migrate to different db though
-          await tracker.handleNewNode(message.payload);
+          tracker.handleNewNode(message.payload);
           break;
         }
 
