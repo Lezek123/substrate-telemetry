@@ -9,7 +9,7 @@ const PG_USER = process.env.PG_USER || 'telemetry';
 const PG_PASS = process.env.PG_PASS || 'telemetry';
 const PG_DB = process.env.PG_DB || 'telemetry';
 const PG_HOST = process.env.PG_HOST || 'localhost';
-const PG_PORT = process.env.PG_PORT || 5433;
+const PG_PORT = process.env.PG_PORT || 5432;
 
 const db = new Sequelize(
   `postgres://${PG_USER}:${PG_PASS}@${PG_HOST}:${PG_PORT}/${PG_DB}`,
