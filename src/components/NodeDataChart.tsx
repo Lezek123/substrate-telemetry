@@ -57,6 +57,10 @@ const NodeDataChart: React.FC<Props> = ({
 
     nodesData.forEach(({ history, nodeName }) => {
       history.forEach(({ timestamp, [dataKey]: value, blocksProcessed }) => {
+        if (value === null) {
+          // Ignore null values
+          return;
+        }
         const aggregationPeriodTs =
           Math.round(timestamp / (aggregation * 60 * 1000)) *
           (aggregation * 60 * 1000);
