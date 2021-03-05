@@ -1,0 +1,5 @@
+db.json
+indexer.log
+api.log
+node_modules
+build
